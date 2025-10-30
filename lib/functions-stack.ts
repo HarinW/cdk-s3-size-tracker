@@ -11,6 +11,10 @@ import * as path from "path";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 
+import * as iam from "aws-cdk-lib/aws-iam";
+
+const plotParamName = "/size-tracker/plot-url";
+
 interface FunctionsStackProps extends cdk.StackProps {
   bucketArn: string;
   tableArn: string;
@@ -93,9 +97,19 @@ export class FunctionsStack extends cdk.Stack {
       memorySize: 512,
       environment: {
         BUCKET_NAME: bucketName,
-        // PLOTTING_API_URL set after API deployment
+        PLOTTING_API_PARAM: plotParamName,
       },
     });
+
+    // IAM: allow GetParameter on that SSM parameter
+    this.driverLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [
+          `arn:aws:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter${plotParamName}`,
+        ],
+      })
+    );
 
     // Permissions
     bucket.grantRead(this.sizeTrackingLambda); // includes ListBucket/GetObject

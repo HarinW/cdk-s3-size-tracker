@@ -32,10 +32,10 @@ const api = new ApiStack(app, "SizeTracker-ApiStack", {
   },
 });
 
-funcs.driverLambda.addEnvironment(
-  "PLOTTING_API_URL",
-  api.httpApi.apiEndpoint + "/plot"
-);
+// funcs.driverLambda.addEnvironment(
+//   "PLOTTING_API_URL",
+//   api.httpApi.apiEndpoint + "/plot"
+// );
 
 // new CdkS3SizeTrackerStack(app, "CdkS3SizeTrackerStack", {
 //   /* If you don't specify 'env', this stack will be environment-agnostic.

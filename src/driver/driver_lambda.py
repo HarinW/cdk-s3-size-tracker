@@ -6,9 +6,21 @@ import urllib.request
 import boto3
 
 BUCKET = os.environ.get("BUCKET_NAME")
-PLOTTING_API_URL = os.environ.get("PLOTTING_API_URL")
+# PLOTTING_API_URL = os.environ.get("PLOTTING_API_URL")
 
 s3 = boto3.client("s3")
+ssm = boto3.client("ssm")
+
+def _resolve_plot_url():
+    # Prefer a direct env var if you ever set it, else fetch from SSM
+    url = os.getenv("PLOTTING_API_URL")
+    if url:
+        return url
+    param = os.getenv("PLOTTING_API_PARAM")
+    if not param:
+        raise RuntimeError("Missing PLOTTING_API_URL or PLOTTING_API_PARAM")
+    resp = ssm.get_parameter(Name=param)
+    return resp["Parameter"]["Value"]
 
 def _put(key: str, body: str):
     s3.put_object(Bucket=BUCKET, Key=key, Body=body.encode("utf-8"))
@@ -20,11 +32,13 @@ def _sleep(seconds: int):
     time.sleep(seconds)
 
 def _call_plotting_api():
-    if not PLOTTING_API_URL:
-        return {"error": "PLOTTING_API_URL not set"}
-    with urllib.request.urlopen(PLOTTING_API_URL) as resp:
-        data = resp.read()
-        return json.loads(data.decode("utf-8"))
+    url = _resolve_plot_url()
+    with urllib.request.urlopen(url) as resp:
+        data = resp.read().decode("utf-8")
+        try:
+            return json.loads(data)
+        except Exception:
+            return {"raw": data}
 
 def lambda_handler(event, context):
     # 1) Create assignment1.txt (19 bytes)
