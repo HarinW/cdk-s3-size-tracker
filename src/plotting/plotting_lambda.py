@@ -9,9 +9,9 @@ matplotlib.use('Agg')  # non-interactive backend for Lambda
 import matplotlib.pyplot as plt
 
 REGION = os.environ.get('AWS_REGION', 'us-east-1')
-DDB_TABLE = 'S3-object-size-history'
+DDB_TABLE = os.environ.get('DDB_TABLE')
 DDB_GSI = os.environ.get("DDB_GSI", "gsi_size")
-BUCKET = os.environ.get('BUCKET_NAME', 'TestBucket')
+BUCKET = os.environ.get('BUCKET_NAME')
 PLOT_KEY = os.environ.get('PLOT_KEY', 'plot')
 
 ddb = boto3.resource('dynamodb')
@@ -22,8 +22,8 @@ def _query_last_10s(bucket: str):
     now = int(datetime.now().timestamp())
     start_ts = now - 10
     resp = table.query(
-        KeyConditionExpression=boto3.dynamodb.conditions.Key('bucket_name').eq(bucket)
-        & boto3.dynamodb.conditions.Key('timestamp').between(start_ts, now),
+        KeyConditionExpression=boto3.dynamodb.conditions.Key('bucket').eq(bucket)
+        & boto3.dynamodb.conditions.Key('ts').between(start_ts, now),
         ScanIndexForward=True, # ascending by ts
     )
     
@@ -35,7 +35,7 @@ def _query_all_time_max_size(bucket: str):
     # Use GSI to avoid scans: query by bucket, sort by total_size desc
     resp = table.query(
         IndexName=DDB_GSI,
-        KeyConditionExpression=boto3.dynamodb.conditions.Key('bucket_name').eq(bucket),
+        KeyConditionExpression=boto3.dynamodb.conditions.Key('bucket').eq(bucket),
         ScanIndexForward=False, # descending by total_size
         Limit=1,
     )

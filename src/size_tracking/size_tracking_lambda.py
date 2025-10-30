@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 REGION = os.getenv('AWS_REGION', 'us-east-1')
-TABLE_NAME = os.environ.get('DDB_TABLE', 'S3-object-size-history')
+TABLE_NAME = os.environ.get('DDB_TABLE')
 
 s3_client = boto3.client('s3', region_name=REGION)
 ddb = boto3.resource('dynamodb', region_name=REGION)
