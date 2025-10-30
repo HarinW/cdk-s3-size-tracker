@@ -59,11 +59,23 @@ export class FunctionsStack extends cdk.Stack {
       (bucket as any).bucketName ?? cdk.Token.asString(bucket.bucketArn);
     const tableName =
       (table as any).tableName ?? cdk.Token.asString(table.tableArn);
+    // Compose the index ARN (all GSIs on this table)
+    const indexArn = cdk.Arn.format(
+      {
+        service: "dynamodb",
+        resource: "table",
+        resourceName: `${tableName}/index/*`,
+        partition: cdk.Aws.PARTITION,
+        region: cdk.Aws.REGION,
+        account: cdk.Aws.ACCOUNT_ID,
+      },
+      this
+    );
 
     // Size-Tracking Lambda Function
     this.sizeTrackingLambda = new lambda.Function(this, "SizeTrackingLambda", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "size_tracking_lambda.handler",
+      handler: "size_tracking_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/size_tracking")),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
@@ -76,7 +88,7 @@ export class FunctionsStack extends cdk.Stack {
     // Plotting Lambda Function
     this.plottingLambda = new lambda.Function(this, "PlottingLambda", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "plotting_lambda.handler",
+      handler: "plotting_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/plotting")),
       timeout: cdk.Duration.seconds(60),
       memorySize: 1536,
@@ -91,7 +103,7 @@ export class FunctionsStack extends cdk.Stack {
     // Driver Lambda
     this.driverLambda = new lambda.Function(this, "DriverLambda", {
       runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "driver_lambda.handler",
+      handler: "driver_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/driver")),
       timeout: cdk.Duration.seconds(60),
       memorySize: 512,
@@ -100,6 +112,14 @@ export class FunctionsStack extends cdk.Stack {
         PLOTTING_API_PARAM: plotParamName,
       },
     });
+
+    // Extra allow for GSI reads
+    this.plottingLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:Query", "dynamodb:DescribeTable"],
+        resources: [table.tableArn, indexArn],
+      })
+    );
 
     // IAM: allow GetParameter on that SSM parameter
     this.driverLambda.addToRolePolicy(
