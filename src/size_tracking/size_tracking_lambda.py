@@ -37,8 +37,8 @@ def lambda_handler(event, context):
     ts = int(now.timestamp())
 
     item = {
-        'bucket_name': bucket_name,
-        'timestamp': ts,
+        'bucket': bucket_name,
+        'ts': ts,
         'total_size': total_size,
         'total_count': total_count
     }
