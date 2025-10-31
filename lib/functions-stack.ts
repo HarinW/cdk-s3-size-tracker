@@ -2,8 +2,6 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as lambda from "aws-cdk-lib/aws-lambda";
-// import * as s3n from "aws-cdk-lib/aws-s3-notifications";
-// import { S3EventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as path from "path";
@@ -149,20 +147,6 @@ export class FunctionsStack extends cdk.Stack {
       },
     });
     rule.addTarget(new targets.LambdaFunction(this.sizeTrackingLambda));
-
-    // props.bucket.addEventNotification(
-    //   s3.EventType.OBJECT_CREATED,
-    //   new s3n.LambdaDestination(this.sizeTrackingLambda)
-    // );
-    // props.bucket.addEventNotification(
-    //   s3.EventType.OBJECT_REMOVED,
-    //   new s3n.LambdaDestination(this.sizeTrackingLambda)
-    // );
-
-    // const s3Source = new S3EventSource(props.bucket, {
-    //   events: [s3.EventType.OBJECT_CREATED, s3.EventType.OBJECT_REMOVED],
-    // });
-    // this.sizeTrackingLambda.addEventSource(s3Source);
 
     new cdk.CfnOutput(this, "DriverLambdaName", {
       value: this.driverLambda.functionName,

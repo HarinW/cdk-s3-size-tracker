@@ -6,7 +6,6 @@ import urllib.request
 import boto3
 
 BUCKET = os.environ.get("BUCKET_NAME")
-# PLOTTING_API_URL = os.environ.get("PLOTTING_API_URL")
 
 s3 = boto3.client("s3")
 ssm = boto3.client("ssm")
