@@ -33,12 +33,15 @@ def _sleep(seconds: int):
 
 def _call_plotting_api():
     url = _resolve_plot_url()
-    with urllib.request.urlopen(url) as resp:
-        data = resp.read().decode("utf-8")
-        try:
-            return json.loads(data)
-        except Exception:
-            return {"raw": data}
+    print(f"Calling plotting API: {url}")
+    try:
+        with urllib.request.urlopen(url) as resp:
+            data = resp.read().decode("utf-8")
+            return json.loads(data) if resp.headers.get_content_type()=="application/json" else {"raw": data}
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8")
+        # RETURN the error body so we can see the Lambda/API message
+        return {"http_error": e.code, "url": url, "body": body}
 
 def lambda_handler(event, context):
     # 1) Create assignment1.txt (19 bytes)

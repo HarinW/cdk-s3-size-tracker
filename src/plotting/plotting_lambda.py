@@ -61,7 +61,7 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
         plt.close(fig)
         return buf
     
-    xs = [datetime.fromtimestamp(int(p['timestamp'])) for p in points]
+    xs = [datetime.fromtimestamp(int(p['ts'])) for p in points]
     ys = [p['total_size'] for p in points]
 
     fig = plt.figure(figsize=(16, 8))
@@ -105,15 +105,13 @@ def lambda_handler(event, context):
     # Upload to S3
     s3.put_object(Bucket=BUCKET, Key=PLOT_KEY, Body=png_buf.getvalue(), ContentType='image/png')
 
-    body = {
-        'message': 'Plot created',
-        'bucket': bucket,
-        'key': PLOT_KEY,
-        'last10_point_count': len(last10),
-        # 'max_all_time': int(max_all_time),
-    }
-
     return {
-        'statusCode': 200,
-        'body': json.dumps(body)
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({
+            "message": "Plot created",
+            "bucket": BUCKET,
+            "key": PLOT_KEY,
+            "last10_point_count": len(last10),
+        })
     }

@@ -38,6 +38,15 @@ export class ApiStack extends cdk.Stack {
       createDefaultStage: true, // $default (no stage path)
     });
 
+    // Allow this HTTP API to invoke the imported Lambda
+    new lambda.CfnPermission(this, "AllowHttpApiInvokePlotting", {
+      action: "lambda:InvokeFunction",
+      functionName: props.plottingLambdaArn, // imported Lambda ARN
+      principal: "apigateway.amazonaws.com",
+      // arn:aws:execute-api:<region>:<account>:<apiId>/*/*/*  — covers all stages/methods/routes
+      sourceArn: `arn:${cdk.Aws.PARTITION}:execute-api:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:${this.httpApi.apiId}/*/*/*`,
+    });
+
     const integration = new integrations.HttpLambdaIntegration(
       "PlotIntegration",
       plottingLambda

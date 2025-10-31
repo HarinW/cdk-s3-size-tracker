@@ -3,6 +3,7 @@ import boto3
 import os
 import logging
 from datetime import datetime
+import time
 
 
 REGION = os.getenv('AWS_REGION')
@@ -60,10 +61,11 @@ def lambda_handler(event, context):
             log.warning("No bucket name found in event or env; nothing to do.")
             return {"statusCode": 200, "body": json.dumps({"message": "No bucket detected"})}
 
+    start = time.time()
     total_size, total_count = calc_bucket_size_count(bucket_name)
 
-    now = datetime.now()
-    ts = int(now.timestamp())
+    now = datetime.now().isoformat()
+    ts = int(time.time())
 
     item = {
         'bucket': bucket_name,
@@ -73,6 +75,8 @@ def lambda_handler(event, context):
     }
     table.put_item(Item=item)
 
+    dur_ms = int((time.time() - start) * 1000)
+
     return {
         'statusCode': 200,
         'body': {
@@ -81,5 +85,6 @@ def lambda_handler(event, context):
             "ts": now,
             "total_size": total_size,
             "total_count": total_count,
+            "duration_ms": dur_ms,
         }
     }
