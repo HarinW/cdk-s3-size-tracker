@@ -1,15 +1,41 @@
 import json
 import boto3
 import os
+import logging
 from datetime import datetime
 
 
-REGION = os.getenv('AWS_REGION', 'us-east-1')
+REGION = os.getenv('AWS_REGION')
 TABLE_NAME = os.environ.get('DDB_TABLE')
 
 s3_client = boto3.client('s3', region_name=REGION)
 ddb = boto3.resource('dynamodb', region_name=REGION)
 table = ddb.Table(TABLE_NAME)
+
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+
+# ---- Helpers ----
+def _get_bucket_from_event(event) -> str | None:
+    """
+    Supports BOTH:
+      1) EventBridge S3 event: event["detail"]["bucket"]["name"]
+      2) S3 -> Lambda notification: event["Records"][...]["s3"]["bucket"]["name"]
+    Returns a bucket name or None.
+    """
+    # EventBridge shape
+    if "detail" in event and isinstance(event["detail"], dict):
+        b = event["detail"].get("bucket")
+        if isinstance(b, dict) and "name" in b:
+            return b["name"]
+
+    # S3 notification shape
+    if "Records" in event and isinstance(event["Records"], list) and event["Records"]:
+        rec0 = event["Records"][0]
+        if "s3" in rec0 and "bucket" in rec0["s3"] and "name" in rec0["s3"]["bucket"]:
+            return rec0["s3"]["bucket"]["name"]
+
+    return None
 
 def calc_bucket_size_count(bucket_name: str):
     # Sum size and count of all CURRENT objects (no versioning assumed)
@@ -26,11 +52,14 @@ def calc_bucket_size_count(bucket_name: str):
 
 def lambda_handler(event, context):
     # S3 event -> determine bucket from the event (single or multiple records)
-    records = event.get('Records', [])
-    if not records:
-        return {'statusCode': 200, 'body': 'No records'}
+    bucket_name = _get_bucket_from_event(event)
+    if not bucket_name:
+        # Optional: allow a fallback to an env var if you only track one bucket
+        bucket_name = os.getenv("BUCKET_NAME")
+        if not bucket_name:
+            log.warning("No bucket name found in event or env; nothing to do.")
+            return {"statusCode": 200, "body": json.dumps({"message": "No bucket detected"})}
 
-    bucket_name = records[0]['s3']['bucket']['name']
     total_size, total_count = calc_bucket_size_count(bucket_name)
 
     now = datetime.now()
