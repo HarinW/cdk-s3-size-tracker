@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import { CoreStack } from "../lib/core-stack";
 import { FunctionsStack } from "../lib/functions-stack";
 import { ApiStack } from "../lib/api-stack";
+import { EventsStack } from "../lib/events-stack";
 
 const app = new cdk.App();
 
