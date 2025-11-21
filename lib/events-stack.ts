@@ -8,7 +8,7 @@ import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 
 interface EventsStackProps extends cdk.StackProps {
-  bucket: s3.IBucket; // from CoreStack
+  bucketArn: string; // from CoreStack
 }
 
 export class EventsStack extends cdk.Stack {
@@ -19,6 +19,10 @@ export class EventsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: EventsStackProps) {
     super(scope, id, props);
 
+    const bucket = s3.Bucket.fromBucketAttributes(this, "ImportedBucket", {
+      bucketArn: props.bucketArn,
+    });
+
     // SNS topic
     this.topic = new sns.Topic(this, "S3EventsTopic", {
       displayName: "S3 Events Fanout",
@@ -26,12 +30,12 @@ export class EventsStack extends cdk.Stack {
 
     // Two SQS queues (one per consumer)
     this.sizeQueue = new sqs.Queue(this, "SizeTrackingQueue", {
-      visibilityTimeout: cdk.Duration.seconds(120),
+      visibilityTimeout: cdk.Duration.seconds(30),
       retentionPeriod: cdk.Duration.days(1),
     });
 
     this.logQueue = new sqs.Queue(this, "LoggingQueue", {
-      visibilityTimeout: cdk.Duration.seconds(120),
+      visibilityTimeout: cdk.Duration.seconds(30),
       retentionPeriod: cdk.Duration.days(1),
     });
 
@@ -44,11 +48,11 @@ export class EventsStack extends cdk.Stack {
     );
 
     // S3 -> SNS notifications
-    props.bucket.addEventNotification(
+    bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.SnsDestination(this.topic)
     );
-    props.bucket.addEventNotification(
+    bucket.addEventNotification(
       s3.EventType.OBJECT_REMOVED,
       new s3n.SnsDestination(this.topic)
     );

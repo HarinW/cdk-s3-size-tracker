@@ -7,11 +7,16 @@ import { EventsStack } from "../lib/events-stack";
 
 const app = new cdk.App();
 
-const core = new CoreStack(app, "SizeTracker-CoreStack", {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: process.env.CDK_DEFAULT_REGION,
+};
+
+const core = new CoreStack(app, "SizeTracker-CoreStack", { env });
+
+const events = new EventsStack(app, "SizeTracker-EventsStack", {
+  bucketArn: core.bucket.bucketArn,
+  env,
 });
 
 const funcs = new FunctionsStack(app, "SizeTracker-FunctionsStack", {
@@ -19,18 +24,15 @@ const funcs = new FunctionsStack(app, "SizeTracker-FunctionsStack", {
   // table: core.table,
   bucketArn: core.bucket.bucketArn,
   tableArn: core.table.tableArn,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+  // queues from Events stack (as ARNs)
+  sizeQueueArn: events.sizeQueue.queueArn,
+  logQueueArn: events.logQueue.queueArn,
+  env,
 });
 
 const api = new ApiStack(app, "SizeTracker-ApiStack", {
   plottingLambdaArn: funcs.plottingLambda.functionArn,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+  env,
 });
 
 // funcs.driverLambda.addEnvironment(

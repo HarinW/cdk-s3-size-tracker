@@ -1,14 +1,19 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cw_actions from "aws-cdk-lib/aws-cloudwatch-actions";
+
+// import * as events from "aws-cdk-lib/aws-events";
+// import * as targets from "aws-cdk-lib/aws-events-targets";
+
 import * as path from "path";
-
-import * as events from "aws-cdk-lib/aws-events";
-import * as targets from "aws-cdk-lib/aws-events-targets";
-
 import * as iam from "aws-cdk-lib/aws-iam";
 
 const plotParamName = "/size-tracker/plot-url";
@@ -16,12 +21,17 @@ const plotParamName = "/size-tracker/plot-url";
 interface FunctionsStackProps extends cdk.StackProps {
   bucketArn: string;
   tableArn: string;
+  sizeQueueArn: string;
+  logQueueArn: string;
 }
 
 export class FunctionsStack extends cdk.Stack {
   public readonly driverLambda: lambda.Function;
   public readonly sizeTrackingLambda: lambda.Function;
   public readonly plottingLambda: lambda.Function;
+
+  public readonly loggingLambda: lambda.Function;
+  public readonly cleanerLambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props: FunctionsStackProps) {
     super(scope, id, props);
@@ -53,6 +63,17 @@ export class FunctionsStack extends cdk.Stack {
       props.tableArn
     );
 
+    const sizeQueue = sqs.Queue.fromQueueArn(
+      this,
+      "ImportedSizeQueue",
+      props.sizeQueueArn
+    );
+    const logQueue = sqs.Queue.fromQueueArn(
+      this,
+      "ImportedLogQueue",
+      props.logQueueArn
+    );
+
     const bucketName =
       (bucket as any).bucketName ?? cdk.Token.asString(bucket.bucketArn);
     const tableName =
@@ -70,12 +91,14 @@ export class FunctionsStack extends cdk.Stack {
       this
     );
 
+    // ---- Lambdas ----
+
     // Size-Tracking Lambda Function
     this.sizeTrackingLambda = new lambda.Function(this, "SizeTrackingLambda", {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "size_tracking_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/size_tracking")),
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(60),
       memorySize: 512,
       environment: {
         DDB_TABLE: tableName,
@@ -94,8 +117,33 @@ export class FunctionsStack extends cdk.Stack {
         DDB_TABLE: tableName,
         BUCKET_NAME: bucketName,
         PLOT_KEY: "plot",
+        WINDOW_SECONDS: "60", // adjust time window
       },
       layers: matplotlibLayer ? [matplotlibLayer] : undefined,
+    });
+
+    // Logging Lambda Function
+    this.loggingLambda = new lambda.Function(this, "LoggingLambda", {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "logging_lambda.lambda_handler",
+      code: lambda.Code.fromAsset(path.join(__dirname, "../src/logging")),
+      timeout: cdk.Duration.seconds(60),
+      memorySize: 256,
+      environment: {
+        LOG_GROUP_NAME: `/aws/lambda/${"LoggingLambda"}`, // default group
+      },
+    });
+
+    // Cleaner Lambda Function
+    this.cleanerLambda = new lambda.Function(this, "CleanerLambda", {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "cleaner_lambda.lambda_handler",
+      code: lambda.Code.fromAsset(path.join(__dirname, "../src/cleaner")),
+      timeout: cdk.Duration.seconds(60),
+      memorySize: 256,
+      environment: {
+        BUCKET_NAME: bucketName,
+      },
     });
 
     // Driver Lambda
@@ -103,7 +151,7 @@ export class FunctionsStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "driver_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/driver")),
-      timeout: cdk.Duration.seconds(60),
+      timeout: cdk.Duration.seconds(900), // adjusted for longer sleeps
       memorySize: 512,
       environment: {
         BUCKET_NAME: bucketName,
@@ -129,6 +177,16 @@ export class FunctionsStack extends cdk.Stack {
       })
     );
 
+    // Logging Lambda needs CW Logs read to backfill deleted object size
+    this.loggingLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["logs:FilterLogEvents"],
+        resources: [
+          `arn:${cdk.Aws.PARTITION}:logs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:log-group:/aws/lambda/*`,
+        ],
+      })
+    );
+
     // Permissions
     bucket.grantRead(this.sizeTrackingLambda); // includes ListBucket/GetObject
     table.grantWriteData(this.sizeTrackingLambda); // PutItem
@@ -138,15 +196,58 @@ export class FunctionsStack extends cdk.Stack {
 
     bucket.grantWrite(this.driverLambda); // Put/Delete objects
 
+    bucket.grantReadWrite(this.cleanerLambda); // Read/Delete objects
+
     // S3 → Size-tracking notifications
-    const rule = new events.Rule(this, "S3EventsToSizeTracker", {
-      eventPattern: {
-        source: ["aws.s3"],
-        detailType: ["Object Created", "Object Deleted"],
-        detail: { bucket: { name: [(bucket as any).bucketName] } },
-      },
+    // const rule = new events.Rule(this, "S3EventsToSizeTracker", {
+    //   eventPattern: {
+    //     source: ["aws.s3"],
+    //     detailType: ["Object Created", "Object Deleted"],
+    //     detail: { bucket: { name: [(bucket as any).bucketName] } },
+    //   },
+    // });
+    // rule.addTarget(new targets.LambdaFunction(this.sizeTrackingLambda));
+
+    // ---- Event sources (SQS) ----
+    this.sizeTrackingLambda.addEventSource(
+      new SqsEventSource(sizeQueue, { batchSize: 5 })
+    );
+
+    this.loggingLambda.addEventSource(
+      new SqsEventSource(logQueue, { batchSize: 5 })
+    );
+
+    // ---- CloudWatch Metric Filter (extract size_delta) ----
+    const loggingGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "LoggingGroup",
+      `/aws/lambda/${this.loggingLambda.functionName}`
+    );
+
+    new logs.MetricFilter(this, "SizeDeltaMetricFilter", {
+      logGroup: loggingGroup,
+      metricNamespace: "Assignment4App",
+      metricName: "TotalObjectSize",
+      filterPattern: logs.FilterPattern.literal("{$.size_delta = *}"),
+      metricValue: "$.size_delta", // from the JSON log
     });
-    rule.addTarget(new targets.LambdaFunction(this.sizeTrackingLambda));
+
+    // ---- Alarm on SUM > 20, fire Cleaner ----
+    const metric = new cloudwatch.Metric({
+      namespace: "Assignment4App",
+      metricName: "TotalObjectSize",
+      statistic: "sum",
+      period: cdk.Duration.minutes(1), // shortest possible period
+    });
+
+    const alarm = new cloudwatch.Alarm(this, "TotalSizeAlarm", {
+      metric,
+      threshold: 20,
+      evaluationPeriods: 1, // period within 1 min requires high-resolution alarms
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    alarm.addAlarmAction(new cw_actions.LambdaAction(this.cleanerLambda));
 
     new cdk.CfnOutput(this, "DriverLambdaName", {
       value: this.driverLambda.functionName,
@@ -156,6 +257,12 @@ export class FunctionsStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "SizeTrackingLambdaName", {
       value: this.sizeTrackingLambda.functionName,
+    });
+    new cdk.CfnOutput(this, "LoggingLambdaName", {
+      value: this.loggingLambda.functionName,
+    });
+    new cdk.CfnOutput(this, "CleanerLambdaName", {
+      value: this.cleanerLambda.functionName,
     });
   }
 }
