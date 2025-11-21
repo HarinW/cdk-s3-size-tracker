@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 REGION = os.environ.get('AWS_REGION', 'us-east-1')
 DDB_TABLE = os.environ.get('DDB_TABLE')
 DDB_GSI = os.environ.get("DDB_GSI", "gsi_size")
-BUCKET = os.environ.get('BUCKET_NAME')
+DATA_BUCKET = os.environ.get('DATA_BUCKET')
+PLOT_BUCKET = os.environ.get('PLOT_BUCKET')
 PLOT_KEY = os.environ.get('PLOT_KEY', 'plot')
 
 ddb = boto3.resource('dynamodb')
@@ -48,7 +49,7 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
         # create an empty plot that still shows max line if any
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111)
-        ax.set_title('Bucket Size (last 15min)')
+        ax.set_title('Bucket Size (last 20min)')
         ax.set_xlabel('Timestamp')
         ax.set_ylabel('Size (bytes)')
         if max_all_time:
@@ -73,7 +74,7 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
         ax.axhline(max_all_time, linestyle='--', label=f'Max ever: {max_all_time}')
         ax.legend()
     
-    ax.set_title('Bucket Size (last 10min)')
+    ax.set_title('Bucket Size (last 20min)')
     ax.set_xlabel('Time')
     ax.set_ylabel('Size (bytes)')
 
@@ -81,8 +82,8 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
     ax.plot(xs, ys, marker='o')
     for x, y in zip(xs, ys):
         ax.text(x, y, f"({y})", fontsize=12)
-    
-    ax.set_title('Bucket Size (last 10s)')
+
+    ax.set_title('Bucket Size (last 20min)')
     ax.set_xlabel('Time')
     ax.set_ylabel('Size (bytes)')
 
@@ -96,21 +97,22 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
     return buf
 
 def lambda_handler(event, context):
-    bucket = BUCKET
+    bucket = DATA_BUCKET
 
     last10 = _query_last_10s(bucket)
     max_all_time = _query_all_time_max_size(bucket)
 
     png_buf = _make_plot(last10, max_all_time)
     # Upload to S3
-    s3.put_object(Bucket=BUCKET, Key=PLOT_KEY, Body=png_buf.getvalue(), ContentType='image/png')
+    s3.put_object(Bucket=PLOT_BUCKET, Key=PLOT_KEY, Body=png_buf.getvalue(), ContentType='image/png')
 
     return {
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps({
             "message": "Plot created",
-            "bucket": BUCKET,
+            "data_bucket": DATA_BUCKET,
+            "plot_bucket": PLOT_BUCKET,
             "key": PLOT_KEY,
             "last10_point_count": len(last10),
         })

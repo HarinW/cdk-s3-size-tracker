@@ -5,7 +5,8 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 
 export class CoreStack extends cdk.Stack {
-  public readonly bucket: s3.Bucket;
+  public readonly dataBucket: s3.Bucket;
+  public readonly plotBucket: s3.Bucket;
   public readonly table: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -19,11 +20,17 @@ export class CoreStack extends cdk.Stack {
     // });
 
     // S3 Bucket
-    this.bucket = new s3.Bucket(this, "DataBucket", {
+    this.dataBucket = new s3.Bucket(this, "DataBucket", {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       eventBridgeEnabled: true,
+    });
+
+    this.plotBucket = new s3.Bucket(this, "PlotBucket", {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     // DynamoDB table with PK/SK and a GSI for max(total_size)
@@ -41,7 +48,12 @@ export class CoreStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    new cdk.CfnOutput(this, "BucketName", { value: this.bucket.bucketName });
+    new cdk.CfnOutput(this, "BucketName", {
+      value: this.dataBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, "PlotBucketName", {
+      value: this.plotBucket.bucketName,
+    });
     new cdk.CfnOutput(this, "TableName", { value: this.table.tableName });
   }
 }

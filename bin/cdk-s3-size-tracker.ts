@@ -15,14 +15,15 @@ const env = {
 const core = new CoreStack(app, "SizeTracker-CoreStack", { env });
 
 const events = new EventsStack(app, "SizeTracker-EventsStack", {
-  bucketArn: core.bucket.bucketArn,
+  bucketArn: core.dataBucket.bucketArn,
   env,
 });
 
 const funcs = new FunctionsStack(app, "SizeTracker-FunctionsStack", {
-  // bucket: core.bucket,
+  // bucket: core.dataBucket,
   // table: core.table,
-  bucketArn: core.bucket.bucketArn,
+  dataBucketArn: core.dataBucket.bucketArn,
+  plotBucketArn: core.plotBucket.bucketArn,
   tableArn: core.table.tableArn,
   // queues from Events stack (as ARNs)
   sizeQueueArn: events.sizeQueue.queueArn,

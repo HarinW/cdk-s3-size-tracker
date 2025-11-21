@@ -53,7 +53,7 @@ def lambda_handler(event, context):
 
     # 2) Create assignment2.txt (28 bytes) -> Alarm should SUM > 20 => Cleaner deletes largest (assignment2.txt)
     _put("assignment2.txt", "Empty Assignment 2222222222")
-    time.sleep(360)  # allow metric period to close & alarm to act
+    time.sleep(420)  # allow metric period to close & alarm to act
     # 1 min period + 30s SQS visibility + 1 min alarm evaluation + buffer
 
     # _delete("assignment1.txt")
@@ -63,7 +63,7 @@ def lambda_handler(event, context):
 
     # 3) Create assignment3.txt (2 bytes) -> Cleaner should delete assignment1.txt
     _put("assignment3.txt", "33")
-    time.sleep(360)
+    time.sleep(420)
 
     # 4) Call plotting API
     plot_resp = _call_plotting_api()

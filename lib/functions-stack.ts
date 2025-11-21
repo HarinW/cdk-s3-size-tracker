@@ -19,7 +19,8 @@ import * as iam from "aws-cdk-lib/aws-iam";
 const plotParamName = "/size-tracker/plot-url";
 
 interface FunctionsStackProps extends cdk.StackProps {
-  bucketArn: string;
+  dataBucketArn: string;
+  plotBucketArn: string;
   tableArn: string;
   sizeQueueArn: string;
   logQueueArn: string;
@@ -53,9 +54,17 @@ export class FunctionsStack extends cdk.Stack {
         )
       : undefined;
 
-    const bucket = s3.Bucket.fromBucketAttributes(this, "ImportedBucket", {
-      bucketArn: props.bucketArn,
-    });
+    const dataBucket = s3.Bucket.fromBucketArn(
+      this,
+      "DataBucket",
+      props.dataBucketArn
+    );
+
+    const plotBucket = s3.Bucket.fromBucketArn(
+      this,
+      "PlotBucket",
+      props.plotBucketArn
+    );
 
     const table = dynamodb.Table.fromTableArn(
       this,
@@ -74,8 +83,12 @@ export class FunctionsStack extends cdk.Stack {
       props.logQueueArn
     );
 
-    const bucketName =
-      (bucket as any).bucketName ?? cdk.Token.asString(bucket.bucketArn);
+    const dataBucketName =
+      (dataBucket as any).bucketName ??
+      cdk.Token.asString(dataBucket.bucketArn);
+    const plotBucketName =
+      (plotBucket as any).bucketName ??
+      cdk.Token.asString(plotBucket.bucketArn);
     const tableName =
       (table as any).tableName ?? cdk.Token.asString(table.tableArn);
     // Compose the index ARN (all GSIs on this table)
@@ -102,7 +115,7 @@ export class FunctionsStack extends cdk.Stack {
       memorySize: 512,
       environment: {
         DDB_TABLE: tableName,
-        BUCKET_NAME: bucketName,
+        BUCKET_NAME: dataBucketName,
       },
     });
 
@@ -115,7 +128,8 @@ export class FunctionsStack extends cdk.Stack {
       memorySize: 1536,
       environment: {
         DDB_TABLE: tableName,
-        BUCKET_NAME: bucketName,
+        DATA_BUCKET: dataBucketName,
+        PLOT_BUCKET: plotBucketName,
         PLOT_KEY: "plot",
         WINDOW_SECONDS: "60", // adjust time window
       },
@@ -142,7 +156,7 @@ export class FunctionsStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(60),
       memorySize: 256,
       environment: {
-        BUCKET_NAME: bucketName,
+        BUCKET_NAME: dataBucketName,
       },
     });
 
@@ -154,7 +168,7 @@ export class FunctionsStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(900), // adjusted for longer sleeps
       memorySize: 512,
       environment: {
-        BUCKET_NAME: bucketName,
+        BUCKET_NAME: dataBucketName,
         PLOTTING_API_PARAM: plotParamName,
       },
     });
@@ -188,16 +202,15 @@ export class FunctionsStack extends cdk.Stack {
     );
 
     // Permissions
-    bucket.grantRead(this.sizeTrackingLambda); // includes ListBucket/GetObject
+    dataBucket.grantRead(this.sizeTrackingLambda); // includes ListBucket/GetObject
     table.grantWriteData(this.sizeTrackingLambda); // PutItem
 
     table.grantReadData(this.plottingLambda); // Query (table + GSI)
-    bucket.grantWrite(this.plottingLambda); // PutObject (for the plot)
+    plotBucket.grantWrite(this.plottingLambda); // PutObject (for the plot)
 
-    bucket.grantWrite(this.driverLambda); // Put/Delete objects
+    dataBucket.grantWrite(this.driverLambda); // Put/Delete objects
 
-    bucket.grantReadWrite(this.cleanerLambda); // Read/Delete objects
-
+    dataBucket.grantReadWrite(this.cleanerLambda); // Read/Delete objects
     // S3 → Size-tracking notifications
     // const rule = new events.Rule(this, "S3EventsToSizeTracker", {
     //   eventPattern: {
