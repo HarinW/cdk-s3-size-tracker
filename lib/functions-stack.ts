@@ -111,7 +111,7 @@ export class FunctionsStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "size_tracking_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/size_tracking")),
-      timeout: cdk.Duration.seconds(60),
+      timeout: cdk.Duration.seconds(20),
       memorySize: 512,
       environment: {
         DDB_TABLE: tableName,
@@ -141,11 +141,8 @@ export class FunctionsStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "logging_lambda.lambda_handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src/logging")),
-      timeout: cdk.Duration.seconds(60),
+      timeout: cdk.Duration.seconds(20),
       memorySize: 256,
-      environment: {
-        LOG_GROUP_NAME: `/aws/lambda/${"LoggingLambda"}`, // default group
-      },
     });
 
     // Cleaner Lambda Function

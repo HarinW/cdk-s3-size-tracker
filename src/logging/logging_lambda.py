@@ -5,7 +5,8 @@ from boto3.session import Session
 log = logging.getLogger()
 log.setLevel(logging.INFO)
 
-LOG_GROUP = os.getenv("LOG_GROUP_NAME") or f"/aws/lambda/{os.getenv('AWS_LAMBDA_FUNCTION_NAME')}"
+FUNCTION_NAME = os.environ["AWS_LAMBDA_FUNCTION_NAME"]
+LOG_GROUP = f"/aws/lambda/{FUNCTION_NAME}"
 logs_client = boto3.client("logs")
 session: Session = boto3.session.Session()
 
