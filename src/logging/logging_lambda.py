@@ -18,22 +18,36 @@ def _find_created_size(object_name: str) -> int | None:
     # Filter pattern for JSON logs:
     #   { $.object_name = "name" && $.size_delta = * }
     start = int((time.time() - 3600) * 1000) # 1h lookback (tweak as needed)
-    patt = '{ $.object_name = "' + object_name + '" && $.size_delta = * }'
-    resp = logs_client.filter_log_events(
-        logGroupName=LOG_GROUP,
-        startTime=start,
-        filterPattern=patt,
-        limit=50,
-    )
-    # Find first positive size_delta
-    for ev in resp.get("events", []):
+    patt = '{ $.object_name = "' + object_name + '" }'
+    for attempt in range(3):
         try:
-            data = json.loads(ev["message"])
-            delta = int(data.get("size_delta", 0))
-            if delta > 0:
-                return delta
-        except Exception:
-            continue
+            # get recent events and filter in code
+            resp = logs_client.filter_log_events(
+                logGroupName=LOG_GROUP,
+                startTime=start,
+                limit=50,
+            )
+        except logs_client.exceptions.ResourceNotFoundException:
+            log.warning(f"Log group {LOG_GROUP} not found")
+            return None
+        except Exception as e:
+            log.warning("filter_log_events error: %s", e)
+            return None
+        # Find first positive size_delta
+        matches = []
+        for ev in resp.get("events", []):
+            try:
+                data = json.loads(ev["message"])
+                if data.get("object_name") == object_name:
+                    delta = int(data.get("size_delta", 0))
+                    if delta > 0:
+                        matches.append(delta)
+            except Exception:
+                continue
+
+        if matches:
+            return matches[-1]  # most recent create event
+        time.sleep(2)  # retry delay
     return None
 
 def lambda_handler(event, context):

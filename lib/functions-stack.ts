@@ -247,7 +247,7 @@ export class FunctionsStack extends cdk.Stack {
       namespace: "Assignment4App",
       metricName: "TotalObjectSize",
       statistic: "sum",
-      period: cdk.Duration.minutes(1), // shortest possible period
+      period: cdk.Duration.minutes(1),
     });
 
     const alarm = new cloudwatch.Alarm(this, "TotalSizeAlarm", {
