@@ -49,7 +49,7 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
         # create an empty plot that still shows max line if any
         fig = plt.figure(figsize=(8, 8))
         ax = fig.add_subplot(111)
-        ax.set_title('Bucket Size (last 20min)')
+        ax.set_title('Bucket Size (last 15min)')
         ax.set_xlabel('Timestamp')
         ax.set_ylabel('Size (bytes)')
         if max_all_time:
@@ -74,7 +74,7 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
         ax.axhline(max_all_time, linestyle='--', label=f'Max ever: {max_all_time}')
         ax.legend()
     
-    ax.set_title('Bucket Size (last 20min)')
+    ax.set_title('Bucket Size (last 15min)')
     ax.set_xlabel('Time')
     ax.set_ylabel('Size (bytes)')
 
@@ -83,7 +83,7 @@ def _make_plot(points, max_all_time):    # points: list of {ts, total_size}
     for x, y in zip(xs, ys):
         ax.text(x, y, f"({y})", fontsize=12)
 
-    ax.set_title('Bucket Size (last 20min)')
+    ax.set_title('Bucket Size (last 15min)')
     ax.set_xlabel('Time')
     ax.set_ylabel('Size (bytes)')
 
